@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1d2b36" />
+    <meta name="description" content="東日本大震災の教訓をもとにした、架空の東北沿岸の町が舞台の防災体験3Dゲーム（試作版）" />
+    <title>14:46 — 高台へ</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="game" aria-label="ゲーム画面"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden" aria-live="polite">
+      <div id="hud-top">
+        <div id="clock-box"><span id="clock">14:45:00</span><small>ゲーム内時刻（時間短縮）</small></div>
+        <div id="objective"></div>
+      </div>
+      <div id="shake-meter" class="hidden"><span>揺れ</span><div><i id="shake-bar"></i></div><b id="shake-label"></b></div>
+      <div id="flood-note" class="hidden">※津波の表現は演出用の簡易モデルです（科学的シミュレーションではありません）</div>
+      <div id="sign-reader" class="hidden"></div>
+      <div id="prompt" class="hidden"></div>
+      <div id="subtitle" class="hidden"></div>
+      <div id="broadcast" class="hidden"></div>
+      <div id="fps" class="hidden"></div>
+      <button id="btn-skip" class="hidden chip">時間を進める ▶▶</button>
+    </div>
+    <div id="vignette"></div>
+    <div id="fade"></div>
+
+    <!-- Touch controls -->
+    <div id="touch" class="hidden">
+      <div id="look-area"></div>
+      <div id="joy"><div id="joy-knob"></div></div>
+      <button id="btn-run" class="tbtn" aria-label="走る">走る</button>
+      <button id="btn-protect" class="tbtn big" aria-label="身を守る">🛡<small>身を守る</small></button>
+      <button id="btn-interact" class="tbtn" aria-label="話す・調べる">話す</button>
+      <button id="btn-map" class="tbtn small" aria-label="地図">地図</button>
+      <button id="btn-pause" class="tbtn small" aria-label="一時停止">Ⅱ</button>
+    </div>
+
+    <!-- Map -->
+    <div id="map" class="hidden" role="dialog" aria-label="ハザードマップ（架空）">
+      <div class="panel">
+        <h2>潮凪町 ハザードマップ（架空・ゲーム用）</h2>
+        <canvas id="map-canvas" width="560" height="620"></canvas>
+        <p class="note">青：浸水が想定される区域（ゲーム内の想定）／緑：避難場所・避難ビル／赤点：現在地</p>
+        <button class="btn" data-close="map">閉じる（M）</button>
+      </div>
+    </div>
+
+    <!-- Screens -->
+    <section id="screen-loading" class="screen">
+      <div class="panel center"><h1>14:46 — 高台へ</h1><p id="loading-text">読み込み中…</p></div>
+    </section>
+
+    <section id="screen-title" class="screen hidden">
+      <div class="panel center title-panel">
+        <p class="kicker">東日本大震災の教訓をもとにした防災体験ゲーム（試作版）</p>
+        <h1>14:46 <span>— 高台へ</span></h1>
+        <p class="lead">舞台は架空の東北沿岸の町「潮凪町」。<br />強い揺れのあと、あなたは高台へ避難できるか。</p>
+        <div class="menu">
+          <button class="btn primary" id="btn-start">はじめる</button>
+          <button class="btn" data-open="controls">操作説明</button>
+          <button class="btn" data-open="settings">設定</button>
+          <button class="btn" data-open="about">史実と創作・出典</button>
+        </div>
+        <p class="fine">実在の被災地・個人の経験を再現したものではありません。防災の専門家による検証は受けていません。</p>
+      </div>
+    </section>
+
+    <section id="screen-notice" class="screen hidden" role="dialog" aria-labelledby="notice-h">
+      <div class="panel">
+        <h2 id="notice-h">はじめる前に（内容についての注意）</h2>
+        <ul id="notice-list"></ul>
+        <h3>この作品について</h3>
+        <ul id="fiction-list"></ul>
+        <ul id="disclaimer-list" class="warn"></ul>
+        <div class="row">
+          <label>演出強度：
+            <select id="notice-intensity">
+              <option value="standard">標準</option>
+              <option value="reduced">軽減（揺れ・音・光を弱く）</option>
+              <option value="minimal">最小（揺れ・光なし、水は簡略表示）</option>
+            </select>
+          </label>
+        </div>
+        <div class="menu">
+          <button class="btn primary" id="btn-notice-ok">理解して進む</button>
+          <button class="btn" id="btn-notice-back">タイトルへ戻る</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-controls" class="screen hidden modal" role="dialog" aria-labelledby="controls-h">
+      <div class="panel">
+        <h2 id="controls-h">操作説明</h2>
+        <div class="cols">
+          <div><h3>キーボード・マウス</h3><table id="controls-desktop"></table></div>
+          <div><h3>スマートフォン</h3><table id="controls-touch"></table></div>
+        </div>
+        <h3>ゲームの流れ</h3>
+        <ol>
+          <li>揺れている間は、倒れやすい物から離れて<b>身を守る</b>。</li>
+          <li>揺れがおさまったら、<b>すぐに高台へ</b>。避難標識（緑の看板）と地図を手がかりに。</li>
+          <li>安全な場所に着いても、<b>すぐには戻らない</b>。</li>
+          <li>最後に、自分の判断を振り返る。</li>
+        </ol>
+        <button class="btn" data-close="controls">閉じる</button>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen hidden modal" role="dialog" aria-labelledby="settings-h">
+      <div class="panel">
+        <h2 id="settings-h">設定</h2>
+        <div class="form">
+          <label>演出強度
+            <select id="set-intensity">
+              <option value="standard">標準</option>
+              <option value="reduced">軽減（揺れ・音・光を弱く）</option>
+              <option value="minimal">最小（揺れ・光なし、水は簡略表示）</option>
+            </select>
+          </label>
+          <label>音量 <input type="range" id="set-volume" min="0" max="100" /></label>
+          <label>カメラ感度 <input type="range" id="set-sens" min="20" max="200" /></label>
+          <label class="check"><input type="checkbox" id="set-invert" /> カメラ上下反転</label>
+          <label>タッチ操作
+            <select id="set-touch"><option value="auto">自動</option><option value="on">常に表示</option><option value="off">表示しない</option></select>
+          </label>
+          <label>画質
+            <select id="set-quality"><option value="high">高（影あり）</option><option value="low">低（軽量）</option></select>
+          </label>
+          <label class="check"><input type="checkbox" id="set-fps" /> FPSを表示</label>
+        </div>
+        <button class="btn" data-close="settings">閉じる</button>
+      </div>
+    </section>
+
+    <section id="screen-about" class="screen hidden modal" role="dialog" aria-labelledby="about-h">
+      <div class="panel scroll">
+        <h2 id="about-h">史実と創作・出典</h2>
+        <h3>確認できる史実</h3>
+        <ul id="about-facts"></ul>
+        <h3>ゲーム上の創作</h3>
+        <ul id="about-fiction"></ul>
+        <h3>避難の原則（公的資料の要約）</h3>
+        <ul id="about-principles"></ul>
+        <h3>出典</h3>
+        <ul id="about-sources" class="sources"></ul>
+        <ul id="about-disclaimer" class="warn"></ul>
+        <button class="btn" data-close="about">閉じる</button>
+      </div>
+    </section>
+
+    <section id="screen-pause" class="screen hidden modal" role="dialog" aria-labelledby="pause-h">
+      <div class="panel center">
+        <h2 id="pause-h">一時停止</h2>
+        <div class="menu">
+          <button class="btn primary" id="btn-resume">再開</button>
+          <button class="btn" data-open="settings">設定</button>
+          <button class="btn" data-open="controls">操作説明</button>
+          <button class="btn" id="btn-pause-retry">揺れの直前からやり直す</button>
+          <button class="btn" id="btn-pause-title">タイトルへ</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-choice" class="screen hidden modal" role="dialog" aria-labelledby="choice-h">
+      <div class="panel center">
+        <h2 id="choice-h"></h2>
+        <p id="choice-body"></p>
+        <div class="menu" id="choice-buttons"></div>
+      </div>
+    </section>
+
+    <section id="screen-fail" class="screen hidden" role="dialog" aria-labelledby="fail-h">
+      <div class="panel center calm">
+        <h2 id="fail-h">避難が間に合いませんでした</h2>
+        <p>ゲームはここで中断します（この先の描写はありません）。</p>
+        <p>津波は、見えてから走っても逃げ切れない速さで迫ります。<br />揺れがおさまったら、海が静かに見えても、すぐに高い場所へ。</p>
+        <div class="menu">
+          <button class="btn primary" id="btn-fail-review">判断を振り返る</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-review" class="screen hidden" role="dialog" aria-labelledby="review-h">
+      <div class="panel scroll wide">
+        <h2 id="review-h">判断の振り返り</h2>
+        <p id="review-outcome" class="outcome"></p>
+        <ul id="review-items" class="review"></ul>
+        <h3>行動の記録</h3>
+        <ol id="review-timeline" class="timeline"></ol>
+        <h3>覚えておきたい原則</h3>
+        <ul id="review-principles"></ul>
+        <ul id="review-disclaimer" class="warn"></ul>
+        <div class="menu">
+          <button class="btn primary" id="btn-retry">再挑戦（揺れの直前から）</button>
+          <button class="btn" id="btn-restart">最初から</button>
+          <button class="btn" data-open="about">出典を見る</button>
+          <button class="btn" id="btn-review-title">タイトルへ</button>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
